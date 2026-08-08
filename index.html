@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERIFICACION LOVAG</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#0b0f14;color:#fff}
+header{background:#111820;padding:22px 18px;text-align:center;border-bottom:1px solid #26313d}
+.logo{font-size:28px;font-weight:800;letter-spacing:1px}.logo span{color:#22c55e}
+.container{max-width:720px;margin:auto;padding:18px}
+.card{background:#111820;border:1px solid #26313d;border-radius:16px;padding:20px;margin-bottom:16px}
+h1,h2{margin-top:0}.subtitle{color:#aab4c0;line-height:1.5}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:13px;border:1px solid #344150;background:#151d26;color:#fff;border-radius:10px;font-weight:bold}
+.tab.active{background:#22c55e;color:#07110a;border-color:#22c55e}
+label{display:block;margin:12px 0 7px;color:#cbd5e1;font-weight:bold}
+input,textarea,select{width:100%;padding:14px;border-radius:10px;border:1px solid #344150;background:#0b0f14;color:#fff;font-size:16px}
+textarea{min-height:100px;resize:vertical}
+button.primary{width:100%;padding:15px;border:0;border-radius:10px;background:#22c55e;color:#07110a;font-size:17px;font-weight:800;margin-top:15px}
+.result{display:none;margin-top:18px}.badge{display:inline-block;padding:6px 10px;border-radius:20px;font-size:13px;font-weight:bold}
+.green{background:#163d27;color:#5ee891}.red{background:#4b1d24;color:#ff8d9a}.yellow{background:#4a3b16;color:#ffd76a}
+.report{margin-top:10px;padding:13px;background:#0b0f14;border-radius:10px}
+.empty{text-align:center;color:#8f9baa;padding:15px}footer{text-align:center;color:#687584;padding:20px;font-size:12px}
+</style>
+</head>
+<body>
+<header><div class="logo">VERIFICACION <span>LOVAG</span></div></header>
+<main class="container">
+<div class="card"><h1>Verificación de WhatsApp</h1>
+<p class="subtitle">Consulta y registra reportes utilizando un número de teléfono o un usuario de WhatsApp con formato <b>@usuario</b>.</p></div>
+
+<div class="tabs">
+<button class="tab active" onclick="mostrar('consulta',this)">Consultar</button>
+<button class="tab" onclick="mostrar('registro',this)">Registrar reporte</button>
+</div>
+
+<section id="consulta" class="card">
+<h2>Consultar</h2>
+<label>Tipo de identificador</label>
+<select id="tipoConsulta" onchange="actualizarPlaceholder()">
+<option value="telefono">Número de teléfono</option><option value="usuario">Usuario de WhatsApp</option>
+</select>
+<label>Identificador</label><input id="busqueda" placeholder="Ej: 3001234567">
+<button class="primary" onclick="consultar()">Buscar información</button>
+<div id="resultado" class="result"></div>
+</section>
+
+<section id="registro" class="card" style="display:none">
+<h2>Registrar reporte</h2>
+<label>Tipo de identificador</label>
+<select id="tipoRegistro" onchange="actualizarPlaceholderRegistro()">
+<option value="telefono">Número de teléfono</option><option value="usuario">Usuario de WhatsApp</option>
+</select>
+<label>Identificador</label><input id="identificador" placeholder="Ej: 3001234567">
+<label>Nombre (opcional)</label><input id="nombre" placeholder="Nombre de la persona">
+<label>Tipo de reporte</label>
+<select id="estado"><option value="positivo">Sin reporte negativo</option><option value="alerta">Precaución / alerta</option><option value="negativo">Reporte negativo</option></select>
+<label>Descripción</label><textarea id="descripcion" placeholder="Describe el motivo del reporte..."></textarea>
+<button class="primary" onclick="registrar()">Guardar reporte</button>
+<div id="mensajeRegistro" class="result"></div>
+</section>
+</main>
+<footer>VERIFICACION LOVAG · Sistema de consulta y registro</footer>
+
+<script>
+const CLAVE='lovag_reportes_v1';
+function obtenerReportes(){try{return JSON.parse(localStorage.getItem(CLAVE))||[]}catch(e){return[]}}
+function guardarReportes(x){localStorage.setItem(CLAVE,JSON.stringify(x))}
+function normalizar(tipo,v){v=(v||'').trim();if(tipo==='usuario'){if(v&&!v.startsWith('@'))v='@'+v;return v.toLowerCase()}return v.replace(/\s+/g,'')}
+function actualizarPlaceholder(){document.getElementById('busqueda').placeholder=document.getElementById('tipoConsulta').value==='usuario'?'Ej: @usuario':'Ej: 3001234567'}
+function actualizarPlaceholderRegistro(){document.getElementById('identificador').placeholder=document.getElementById('tipoRegistro').value==='usuario'?'Ej: @usuario':'Ej: 3001234567'}
+function mostrar(id,b){document.getElementById('consulta').style.display=id==='consulta'?'block':'none';document.getElementById('registro').style.display=id==='registro'?'block':'none';document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active')}
+function consultar(){
+const tipo=document.getElementById('tipoConsulta').value,v=normalizar(tipo,document.getElementById('busqueda').value),out=document.getElementById('resultado');out.style.display='block';
+if(!v){out.innerHTML='<div class="empty">Ingresa un número o usuario para consultar.</div>';return}
+const rs=obtenerReportes().filter(r=>r.tipo===tipo&&r.identificador===v);
+if(!rs.length){out.innerHTML='<div class="item"><span class="badge green">SIN REPORTES</span><p>No encontramos reportes registrados para este identificador.</p></div>';return}
+const neg=rs.some(r=>r.estado==='negativo'),ale=rs.some(r=>r.estado==='alerta');
+let h=neg?'<span class="badge red">REPORTE NEGATIVO</span>':ale?'<span class="badge yellow">ALERTA</span>':'<span class="badge green">SIN REPORTE NEGATIVO</span>';
+h+='<div style="margin-top:14px"><b>'+esc(v)+'</b></div>';
+rs.forEach(r=>{h+='<div class="report">'+(r.nombre?'<div><b>Nombre:</b> '+esc(r.nombre)+'</div>':'')+'<div class="small">'+new Date(r.fecha).toLocaleString('es-CO')+'</div><p>'+esc(r.descripcion||'Sin descripción')+'</p></div>'});
+out.innerHTML=h}
+function registrar(){
+const tipo=document.getElementById('tipoRegistro').value,v=normalizar(tipo,document.getElementById('identificador').value),nombre=document.getElementById('nombre').value.trim(),estado=document.getElementById('estado').value,descripcion=document.getElementById('descripcion').value.trim(),m=document.getElementById('mensajeRegistro');
+if(!v||!descripcion){m.style.display='block';m.innerHTML='<span class="badge red">FALTAN DATOS</span><p>Ingresa el identificador y la descripción del reporte.</p>';return}
+const rs=obtenerReportes();rs.push({id:Date.now(),tipo,identificador:v,nombre,estado,descripcion,fecha:new Date().toISOString()});guardarReportes(rs);
+m.style.display='block';m.innerHTML='<span class="badge green">REPORTE GUARDADO</span><p>El reporte quedó asociado a '+esc(v)+'.</p>';
+document.getElementById('identificador').value='';document.getElementById('nombre').value='';document.getElementById('descripcion').value=''
+}
+function esc(t){return String(t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+</script>
+</body>
+</html>
