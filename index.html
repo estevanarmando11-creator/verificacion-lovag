@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>VERIFICACIÓN LOVAG</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#07121d;--card:#f7f8fa;--text:#17212b;--muted:#66727d;--green:#18bf62;--navy:#23384b;--border:#dfe4e8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--text)}
+.wrap{width:min(100%,430px);margin:auto;padding:18px 12px 35px}.brand{color:#fff;font-weight:800;font-size:18px;margin:0 0 14px 2px}.brand span{color:var(--green)}
+.card{background:var(--card);border-radius:14px;padding:14px;margin:9px 0;box-shadow:0 4px 18px #0002}
+h2{font-size:18px;margin:0 0 13px}label{display:block;font-size:12px;font-weight:700;margin:10px 0 6px}
+input,select,textarea{width:100%;border:1px solid var(--border);border-radius:7px;background:#fff;padding:10px 11px;font-size:13px}
+textarea{min-height:72px;resize:vertical}button{border:0;border-radius:7px;padding:10px 12px;font-weight:800;font-size:11px;cursor:pointer;width:100%;margin-top:9px}
+.green{background:var(--green);color:#fff}.navy{background:var(--navy);color:#fff}
+.status{padding:10px;border-radius:8px;margin-top:10px;font-size:12px;display:none}.ok{background:#e3f8ec;color:#126a39}.bad{background:#fde9e9;color:#9e2020}
+.result{border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-size:12px;display:none}.row{display:flex;justify-content:space-between;gap:10px;margin:5px 0}
+.hidden{display:none!important}.small{font-size:11px;color:var(--muted)}.topline{display:flex;justify-content:space-between;align-items:center}
+.logout{width:auto;margin:0;padding:7px 9px;background:#e8edf1;color:#34424d}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:18px;z-index:10}
+.modal .card{width:min(100%,430px);max-height:85vh;overflow:auto}.report{border:1px solid var(--border);border-radius:8px;padding:10px;margin:8px 0;background:#fff}
+.report .reason{font-weight:800}.pill{display:inline-block;padding:3px 7px;border-radius:99px;background:#e8edf1;font-size:10px;margin-top:5px}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center}.login .card{width:min(100%,390px)}
+</style>
+</head>
+<body>
+<div id="loginView" class="login"><div class="card">
+<div class="brand">VERIFICA <span>WHATSAPP</span></div>
+<h2>🔐 Iniciar sesión</h2><label>Correo</label><input id="email" type="email" placeholder="correo@ejemplo.com">
+<label>Contraseña</label><input id="password" type="password" placeholder="••••••••">
+<button class="green" onclick="login()">INGRESAR</button><div id="loginStatus" class="status"></div>
+<p class="small">Usa el usuario creado en Supabase Authentication.</p></div></div>
+
+<div id="appView" class="wrap hidden">
+<div class="topline"><div class="brand">VERIFICA <span>WHATSAPP</span></div><button class="logout" onclick="logout()">SALIR</button></div>
+<div class="card"><div class="small">Sesión: <b id="sessionName">Cargando...</b></div></div>
+
+<div class="card"><h2>🔎 Verificar contacto</h2>
+<label>Número de WhatsApp</label><input id="searchPhone" placeholder="+57 300 123 4567">
+<label>Usuario de WhatsApp</label><input id="searchUsername" placeholder="@usuario">
+<button class="green" onclick="searchContact()">CONSULTAR</button><div id="searchStatus" class="status"></div><div id="searchResult" class="result"></div></div>
+
+<div class="card"><h2>📝 Registrar reporte</h2>
+<label>Número</label><input id="reportPhone" placeholder="+57 300 123 4567">
+<label>Usuario</label><input id="reportUsername" placeholder="@usuario">
+<label>Motivo</label><select id="reason"><option>Información falsa</option><option>Número no corresponde</option><option>Usuario no corresponde</option><option>Incumplimiento</option><option>Estafa</option><option>Otro</option></select>
+<label>Descripción</label><textarea id="description" placeholder="Describe hechos concretos y verificables..."></textarea>
+<button class="green" onclick="saveReport()">GUARDAR REPORTE</button><div id="reportStatus" class="status"></div></div>
+
+<div class="card"><button class="navy" onclick="showHistory()">📋 HISTORIAL</button>
+<button class="navy" onclick="openLinkModal()">🔗 VINCULAR NÚMERO + @USUARIO</button></div></div>
+
+<div id="historyModal" class="modal" onclick="closeOnBackdrop(event,'historyModal')"><div class="card">
+<div class="topline"><h2>📋 Historial</h2><button class="logout" onclick="closeModal('historyModal')">CERRAR</button></div><div id="historyList" class="small">Cargando...</div></div></div>
+
+<div id="linkModal" class="modal" onclick="closeOnBackdrop(event,'linkModal')"><div class="card">
+<div class="topline"><h2>🔗 Vincular contacto</h2><button class="logout" onclick="closeModal('linkModal')">CERRAR</button></div>
+<label>Número</label><input id="linkPhone" placeholder="+57 300 123 4567"><label>@Usuario</label><input id="linkUsername" placeholder="@usuario">
+<label>Nombre (opcional)</label><input id="linkName" placeholder="Nombre visible"><button class="green" onclick="linkContact()">GUARDAR VINCULACIÓN</button><div id="linkStatus" class="status"></div>
+</div></div>
+
+<script>
+const SUPABASE_URL="https://aaakmoylfzkadlyzbs.supabase.co";
+const SUPABASE_KEY="sb_publishable_K4-hEsNRtAB7SQ8Jo4zQkA_NaZNGUWx";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let currentUser=null,selectedContact=null;
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+function normPhone(v){return(v||"").replace(/[^\d+]/g,"").trim()}
+function normUser(v){v=(v||"").trim().toLowerCase();return v&&!v.startsWith("@")?"@"+v:v}
+function msg(e,t,c){e.textContent=t;e.className="status "+c;e.style.display="block"}
+function closeModal(id){$(id).style.display="none"}function closeOnBackdrop(e,id){if(e.target.id===id)closeModal(id)}
+function openLinkModal(){$("linkModal").style.display="flex"}
+
+async function login(){
+ const email=$("email").value.trim(),password=$("password").value;
+ if(!email||!password)return msg($("loginStatus"),"Completa correo y contraseña.","bad");
+ const {data,error}=await db.auth.signInWithPassword({email,password});
+ if(error)return msg($("loginStatus"),error.message,"bad");
+ currentUser=data.user;await loadApp();$("loginStatus").style.display="none";
+}
+async function logout(){await db.auth.signOut();location.reload()}
+async function loadApp(){
+ $("loginView").classList.add("hidden");$("appView").classList.remove("hidden");
+ const {data}=await db.from("profiles").select("full_name,username,role").eq("id",currentUser.id).maybeSingle();
+ $("sessionName").textContent=data?.full_name||data?.username||currentUser.email;
+}
+async function searchContact(){
+ const phone=normPhone($("searchPhone").value),username=normUser($("searchUsername").value);
+ if(!phone&&!username)return msg($("searchStatus"),"Ingresa número, usuario o ambos.","bad");
+ let q=db.from("contacts").select("id,phone,wa_username,display_name,created_at");
+ q=phone?q.eq("phone",phone):q.eq("wa_username",username);
+ const {data,error}=await q.maybeSingle();
+ if(error&&error.code!=="PGRST116")return msg($("searchStatus"),error.message,"bad");
+ if(!data)return msg($("searchStatus"),"❌ No se encontró el contacto.","bad");
+ selectedContact=data;$("reportPhone").value=data.phone||phone;$("reportUsername").value=data.wa_username||username;
+ const {data:reports}=await db.from("reports").select("id,reason,status,description,created_at").eq("contact_id",data.id).order("created_at",{ascending:false});
+ let h=`<div class="row"><b>Número</b><span>${esc(data.phone||"—")}</span></div><div class="row"><b>Usuario</b><span>${esc(data.wa_username||"—")}</span></div><div class="row"><b>Nombre</b><span>${esc(data.display_name||"—")}</span></div><div class="row"><b>Reportes</b><span>${reports?.length||0}</span></div>`;
+ h+=(reports||[]).slice(0,10).map(r=>`<div class="report"><div class="reason">${esc(r.reason)}</div><div>${esc(r.description)}</div><span class="pill">${esc(r.status)} · ${new Date(r.created_at).toLocaleString("es-CO")}</span></div>`).join("");
+ $("searchResult").innerHTML=h;$("searchResult").style.display="block";msg($("searchStatus"),"✅ Contacto encontrado.","ok");
+}
+async function getOrCreateContact(phone,username){
+ phone=normPhone(phone);username=normUser(username);if(!phone&&!username)throw new Error("Debes indicar número o @usuario.");
+ let found=null;
+ if(phone){const r=await db.from("contacts").select("*").eq("phone",phone).maybeSingle();if(r.error&&r.error.code!=="PGRST116")throw r.error;found=r.data}
+ if(!found&&username){const r=await db.from("contacts").select("*").eq("wa_username",username).maybeSingle();if(r.error&&r.error.code!=="PGRST116")throw r.error;found=r.data}
+ if(found)return found;
+ const r=await db.from("contacts").insert({phone:phone||null,wa_username:username||null}).select().single();if(r.error)throw r.error;return r.data;
+}
+async function saveReport(){
+ try{
+  const phone=normPhone($("reportPhone").value),username=normUser($("reportUsername").value),reason=$("reason").value,description=$("description").value.trim();
+  if(!phone&&!username)return msg($("reportStatus"),"Indica número o @usuario.","bad");
+  if(!description)return msg($("reportStatus"),"Describe los hechos concretos.","bad");
+  const contact=await getOrCreateContact(phone,username);
+  const {error}=await db.from("reports").insert({contact_id:contact.id,reason,description,status:"reported",created_by:currentUser.id});
+  if(error)throw error;$("description").value="";msg($("reportStatus"),"✅ Reporte guardado correctamente.","ok");
+ }catch(e){msg($("reportStatus"),e.message||"No fue posible guardar el reporte.","bad")}
+}
+async function linkContact(){
+ try{
+  const phone=normPhone($("linkPhone").value),username=normUser($("linkUsername").value),name=$("linkName").value.trim();
+  if(!phone||!username)return msg($("linkStatus"),"Completa número y usuario.","bad");
+  const r=await db.from("contacts").select("id").eq("phone",phone).maybeSingle();if(r.error&&r.error.code!=="PGRST116")throw r.error;
+  let error;if(r.data){({error}=await db.from("contacts").update({wa_username:username,display_name:name||null,updated_at:new Date().toISOString()}).eq("id",r.data.id))}
+  else{({error}=await db.from("contacts").insert({phone,wa_username:username,display_name:name||null}))}
+  if(error)throw error;msg($("linkStatus"),"✅ Vinculación guardada.","ok");
+ }catch(e){msg($("linkStatus"),e.message||"No fue posible vincular.","bad")}
+}
+async function showHistory(){
+ $("historyModal").style.display="flex";const list=$("historyList");list.textContent="Cargando...";
+ const {data,error}=await db.from("reports").select("id,contact_id,reason,description,status,created_at").order("created_at",{ascending:false}).limit(100);
+ if(error){list.textContent="Error: "+error.message;return}if(!data?.length){list.textContent="No hay reportes registrados.";return}
+ const ids=[...new Set(data.map(x=>x.contact_id))];const {data:contacts}=await db.from("contacts").select("id,phone,wa_username,display_name").in("id",ids);
+ const map=Object.fromEntries((contacts||[]).map(c=>[c.id,c]));
+ list.innerHTML=data.map(r=>{const c=map[r.contact_id]||{};return`<div class="report"><div class="reason">${esc(r.reason)}</div><div><b>${esc(c.phone||"")}</b> ${esc(c.wa_username||"")}</div><div>${esc(r.description)}</div><span class="pill">${esc(r.status)} · ${new Date(r.created_at).toLocaleString("es-CO")}</span></div>`}).join("");
+}
+(async()=>{const {data}=await db.auth.getSession();if(data.session){currentUser=data.session.user;await loadApp()}})();
+</script>
+</body>
+</html>
